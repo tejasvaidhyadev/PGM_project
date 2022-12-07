@@ -9,29 +9,30 @@ import os
 from utils import *
 import pandas as pd
 import numpy as np
+CUDA = (torch.cuda.device_count() > 0)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--exp_name', type=str, default='experiment')
-parser.add_argument("--train_file", default="testdata.csv", type=str, required=True,
+parser.add_argument("--data_dir", default="testdata.csv", type=str, required=False,
                     help="The input training data file (a csv file).")
-parser.add_argument("--model_card", default="bert-base-uncased", type=str, required=True,
+parser.add_argument("--model_card", default="bert-base-uncased", type=str, required=False,
                     help="The model card to use.")
-parser.add_argument("--batch_size", default=32, type=int, required=True,
+parser.add_argument("--batch_size", default=32, type=int, required=False,
                     help="Batch size for training.")
 
-parser.add_argument("--learning_rate", default=2e-5, type=float, required=True,
+parser.add_argument("--learning_rate", default=2e-5, type=float, required=False,
                     help="The initial learning rate for Adam.")
-parser.add_argument("--num_train_epochs", default=3.0, type=float, required=True,
+parser.add_argument("--num_train_epochs", default=3.0, type=float, required=False,
                     help="Total number of training epochs to perform.")
-parser.add_argument("--warmup_steps", default=0, type=int, required=True,
+parser.add_argument("--warmup_steps", default=0, type=int, required=False,
                     help="Linear warmup over warmup_steps.")    
-parser.add_argument("--output_dir", default="output", type=str, required=True,
+parser.add_argument("--output_dir", default="output", type=str, required=False,
                     help="The output directory where the model predictions and checkpoints will be written.")
 
 args = parser.parse_args()
 
-CUDA = (torch.cuda.device_count() > 0)
 MASK_IDX = 103
+
 class CausalBertWrapper:
     """Model wrapper in charge of training and inference."""
 

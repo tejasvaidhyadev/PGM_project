@@ -7,6 +7,7 @@ import pdb
 from sklearn.linear_model import LogisticRegression
 import torch
 import math
+CUDA = (torch.cuda.device_count() > 0)
 
 def logit(p):
     return torch.log(p / (1 - p))   

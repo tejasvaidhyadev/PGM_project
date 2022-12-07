@@ -1,8 +1,12 @@
-**/data
-**/outputs
-**/models
-**/logs
-**/out
-**/wandb
-# ignore python cache
 __pycache__
+
+.ipynb_checkpoints/
+testdata.csv
+
+logs
+
+data
+
+dat
+code/
+
