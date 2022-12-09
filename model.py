@@ -73,7 +73,6 @@ class CausalBert(DistilBertPreTrainedModel):
 
         C_bow = make_bow_vector(C.unsqueeze(1), self.num_labels)
         inputs = torch.cat((pooled_output, C_bow), 1)
-
         # g logits
         g = self.g_cls(inputs)
         if Y is not None:  # TODO train/test mode, this is a lil hacky

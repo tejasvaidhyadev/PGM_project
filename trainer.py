@@ -13,7 +13,7 @@ CUDA = (torch.cuda.device_count() > 0)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--exp_name', type=str, default='experiment')
-parser.add_argument("--data_dir", default="testdata.csv", type=str, required=False,
+parser.add_argument("--data_dir", default="try.csv", type=str, required=False,
                     help="The input training data file (a csv file).")
 parser.add_argument("--model_card", default="bert-base-uncased", type=str, required=False,
                     help="The model card to use.")
@@ -55,7 +55,7 @@ class CausalBertWrapper:
 
 
     def train(self, texts, confounds, treatments, outcomes,
-            learning_rate=2e-5, epochs=3):
+            learning_rate=2e-5, epochs=5):
         dataloader = build_dataloader( "distilbert-base-uncased", self.batch_size,
             texts, confounds, treatments, outcomes)
 
@@ -83,7 +83,7 @@ class CausalBertWrapper:
                     optimizer.step()
                     scheduler.step()
                     losses.append(loss.detach().cpu().item())
-                # print(np.mean(losses))
+            print(np.mean(losses))
                     # if step > 5: continue
         return self.model
 
@@ -119,6 +119,10 @@ class CausalBertWrapper:
             Q1 = Q_probs[:, 1]
 
         return np.mean(Q0 - Q1)
+    
+    def gt(self, reduced_df):
+        gt = reduced_df[reduced_df.treatment == 1].y1.mean() - reduced_df[reduced_df.treatment == 1].y0.mean()
+    
 
 if __name__ == '__main__':
     if not os.path.exists('logs'):
@@ -138,12 +142,15 @@ if __name__ == '__main__':
     logging.info('Loading data... at %s', args.data_dir)
     
     df = pd.read_csv(args.data_dir)
-    cb = CausalBertWrapper(batch_size=2,
+    cb = CausalBertWrapper(batch_size=32,
         g_weight=0.1, Q_weight=0.1, mlm_weight=1)
     print(df.T)
 
     # This trainer sucks, but it's a start
-    cb.train(df['text'], df['C'], df['T'], df['Y'], epochs=1)
-    print(cb.ATE(df['C'], df.text, platt_scaling=True))
-
-
+    cb.train(df['title'], df['contains_appendix'], df['treatment'], df['outcome'], epochs=10)
+    
+    logging.info("ATE")
+    logging.info(cb.ATE(df['contains_appendix'], df.title, platt_scaling=True))
+    
+    logging.info("Ground Truth")
+    logging.info("0.11149892158470887")

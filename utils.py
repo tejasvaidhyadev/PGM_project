@@ -49,6 +49,50 @@ def make_bow_vector(ids, vocab_size, use_counts=False):
         vec = (vec != 0).float()
     return vec
 
+def psi_q_only(q_t0, q_t1, g, t, y, prob_t, truncate_level=0.05):
+    q_t0, q_t1, g, t, y = truncate_all_by_g(q_t0, q_t1, g, t, y, truncate_level)
+
+    ite_t = (q_t1 - q_t0)[t == 1]
+    estimate = ite_t.mean()
+    return estimate
+
+
+def psi_plugin(q_t0, q_t1, g, t, y, prob_t, truncate_level=0.05):
+    q_t0, q_t1, g, t, y = truncate_all_by_g(q_t0, q_t1, g, t, y, truncate_level)
+
+    ite_t = g*(q_t1 - q_t0)/prob_t
+    estimate = ite_t.mean()
+    return estimate
+
+
+def psi_aiptw(q_t0, q_t1, g, t, y, prob_t, truncate_level=0.05):
+    # the robust ATT estimator described in eqn 3.9 of
+    # https://www.econstor.eu/bitstream/10419/149795/1/869216953.pdf
+
+    q_t0, q_t1, g, t, y = truncate_all_by_g(q_t0, q_t1, g, t, y, truncate_level)
+    estimate = (t*(y-q_t0) - (1-t)*(g/(1-g))*(y-q_t0)).mean() / prob_t
+
+    return estimate
+
+
+def psi_very_naive(t, y):
+    return y[t == 1].mean() - y[t == 0].mean()
+
+
+def att_estimates(q0, q1, g, t, y, prob_t, truncate_level=0.05, deps=0.0001):
+
+    one_step_tmle = make_one_step_tmle(prob_t, deps_default=deps)
+
+    very_naive = psi_very_naive(t,y)
+    q_only = psi_q_only(q0, q1, g, t, y, prob_t, truncate_level)
+    plugin = psi_plugin(q0, q1, g, t, y, prob_t, truncate_level)
+    aiptw = psi_aiptw(q0, q1, g, t, y, prob_t, truncate_level)
+    one_step_tmle = one_step_tmle(q0, q1, g, t, y, truncate_level)  # note different signature
+
+    estimates = {'very_naive': very_naive, 'q_only': q_only, 'plugin': plugin, 'one_step_tmle': one_step_tmle, 'aiptw': aiptw}
+
+    return estimates
+
 def set_logger(log_path):
     """Set the logger to log info in terminal and file `log_path`."""
     logger = logging.getLogger()
