@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch 
 import math 
 from sklearn.linear_model import LogisticRegression
-from utils import platt_scale, gelu, make_bow_vector
+from utils import platt_scale, gelu
 
 CUDA = (torch.cuda.device_count() > 0)
 MASK_IDX = 103
@@ -13,6 +13,7 @@ MASK_IDX = 103
 class CausalBert(nn.Module):
     """The model itself."""
     # very hacky implemenation of the causal bert model, but it works for now
+    # now the current version support all the formate
     def __init__(self, 
             model_card,
             num_labels=2,
@@ -70,7 +71,7 @@ class CausalBert(nn.Module):
         pooled_output = seq_output[:, 0]
         # seq_output, pooled_output = outputs[:2]
         # pooled_output = self.dropout(pooled_output)
-
+        # L(wi; ξ, γ) = yi − Q˜(ti, λi; γ)**2+ CrossEntti, g˜(λi; γ) + LU(wi; ξ, γ)
         if use_mlm:
             prediction_logits = self.vocab_transform(seq_output)  # (bs, seq_length, dim)
             prediction_logits = gelu(prediction_logits)  # (bs, seq_length, dim)
@@ -81,8 +82,6 @@ class CausalBert(nn.Module):
         else:
             mlm_loss = 0.0
 
-        #C_bow = make_bow_vector(C.unsqueeze(1), self.num_labels)
-        #inputs = torch.cat((pooled_output, C_bow), 1)
         inputs = pooled_output
         
         # g logits
@@ -92,10 +91,6 @@ class CausalBert(nn.Module):
         else:
             g_loss = 0.0
 
-        # conditional expected outcome logits: 
-        # run each example through its corresponding T matrix
-        # TODO this would be cleaner with sigmoid and BCELoss, but less general 
-        #   (and I couldn't get it to work as well)
         Q_logits_T0 = self.Q_cls['0'](inputs)
         Q_logits_T1 = self.Q_cls['1'](inputs)
 

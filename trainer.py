@@ -13,7 +13,7 @@ CUDA = (torch.cuda.device_count() > 0)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--exp_name', type=str, default='experiment')
-parser.add_argument("--data_dir", default="try.csv", type=str, required=False,
+parser.add_argument("--data_dir", default="./PeerRead/proc/beta0_0.25beta1_5.0gamma_0.0.csv", type=str, required=False,
                     help="The input training data file (a csv file).")
 parser.add_argument("--model_card", default="bert-base-uncased", type=str, required=False,
                     help="The model card to use.")
@@ -22,12 +22,18 @@ parser.add_argument("--batch_size", default=32, type=int, required=False,
 
 parser.add_argument("--learning_rate", default=2e-5, type=float, required=False,
                     help="The initial learning rate for Adam.")
-parser.add_argument("--num_train_epochs", default=20, type=float, required=False,
+parser.add_argument("--num_train_epochs", default=1, type=float, required=False,
                     help="Total number of training epochs to perform.")
 parser.add_argument("--warmup_steps", default=0, type=int, required=False,
                     help="Linear warmup over warmup_steps.")    
 parser.add_argument("--output_dir", default="output", type=str, required=False,
                     help="The output directory where the model predictions and checkpoints will be written.")
+parser.add_argument("--Q_weigth", default=0.1, type=float, required=False,
+                    help="Weigthing of Q term in loss")
+parser.add_argument("--g_weight", default=1.0, type=float, required=False,
+                    help="Weigthing of g term in loss")
+parser.add_argument("--mlm_weight", default=1.0, type=float, required=False,
+                    help="Weigthing of g term in loss")
 
 args = parser.parse_args()
 
@@ -54,10 +60,10 @@ class CausalBertWrapper:
         self.batch_size = batch_size
 
 
-    def train(self, texts, confounds, treatments, outcomes,
+    def train(self, texts, treatments, outcomes,
             learning_rate=2e-5, epochs=5):
         dataloader = build_dataloader( args.model_card, self.batch_size,
-            texts, confounds, treatments, outcomes)
+            texts, treatments, outcomes)
 
         self.model.train()
         optimizer = optim.Adam( self.model.parameters(), lr=learning_rate, eps=1e-8)
@@ -89,9 +95,9 @@ class CausalBertWrapper:
         return self.model
 
 
-    def inference(self, texts, confounds, outcome=None):
+    def inference(self, texts, outcome=None):
         self.model.eval()
-        dataloader = build_dataloader(args.model_card, self.batch_size, texts, confounds, outcomes=outcome,
+        dataloader = build_dataloader(args.model_card, self.batch_size, texts, outcomes=outcome,
             sampler='sequential')
         Q0s = []
         Q1s = []
@@ -104,26 +110,35 @@ class CausalBertWrapper:
             Q0s += Q0.detach().cpu().numpy().tolist()
             Q1s += Q1.detach().cpu().numpy().tolist()
             Ys += Y.detach().cpu().numpy().tolist()
-            # if i > 5: break
         probs = np.array(list(zip(Q0s, Q1s)))
         preds = np.argmax(probs, axis=1)
 
-        return probs, preds, Ys
+        return probs, preds, Ys, g
 
     def ATE(self, C, W, Y=None, platt_scaling=False):
-        Q_probs, _, Ys = self.inference(W, C, outcome=Y)
+        Q_probs, _, Ys, g = self.inference(W, C, outcome=Y)
         if platt_scaling and Y is not None:
             Q0 = platt_scale(Ys, Q_probs[:, 0])[:, 0]
             Q1 = platt_scale(Ys, Q_probs[:, 1])[:, 1]
         else:
             Q0 = Q_probs[:, 0]
             Q1 = Q_probs[:, 1]
-
+        # q_t0, q_t1, g, t, y, prob_t
+        # get treatment from dataloader
+        
+        treatments = []
+        for batch in dataloader:
+            treatments += batch[4].detach().cpu().numpy().tolist()
+        df = pd.DataFrame(list(zip(Q0s, Q1s, g, treatments, Ys)), columns=['q_t0', 'q_t1', "g", 't', 'Y'])
+        df.to_csv('logs/'+args.exp_name+'/inference.csv', index=False)
+        
         return np.mean(Q1 - Q0)
     
-    def gt(self, reduced_df):
-        gt = reduced_df[reduced_df.treatment == 1].y1.mean() - reduced_df[reduced_df.treatment == 1].y0.mean()
+    def gt(self, df):
+        gt = df[df.treatment == 1].y1.mean() - df[df.treatment == 1].y0.mean()
     
+    def unadjusted(self, df):
+        df[df.treatment == 1].outcome.mean() - df[df.treatment == 0].outcome.mean()
 
 if __name__ == '__main__':
     if not os.path.exists('logs'):
@@ -144,19 +159,20 @@ if __name__ == '__main__':
     
     df = pd.read_csv(args.data_dir)
     cb = CausalBertWrapper(batch_size=args.batch_size,
-        g_weight=0.1, Q_weight=0.1, mlm_weight=5)
+        g_weight=args.g_weight, Q_weight=args.g_weight, mlm_weight=args.mlm_weight)
     logging.info(df.T)
 
     # This trainer sucks, but it's a start
-    cb.train(df['title'], df['contains_appendix'], df['treatment'], df['outcome'], learning_rate=args.learning_rate, epochs=args.num_train_epochs)
+    cb.train(df['title'], df['treatment'], df['outcome'], learning_rate=args.learning_rate, epochs=args.num_train_epochs)
     
     logging.info("ATE")
-    logging.info(cb.ATE(df['contains_appendix'], df.title, platt_scaling=True))
+    logging.info(cb.ATE( df.title, platt_scaling=True))
     
     logging.info("Ground Truth")
     
     # very specific to preprocessing and dataformate 
-    gt = df[df.treatment == 1].y1.mean() - df[df.treatment == 1].y0.mean()
-    naive = df[df.treatment == 1].outcome.mean() - df[df.treatment == 0].outcome.mean()
-    
-    logging.info("0.11149892158470887")
+    gt = cb.gt(df)
+    logging.info("ground truth", gt)
+
+    naive = cb.unadjusted(df)
+    logging.info("Unadjusted", naive)

@@ -3,12 +3,10 @@ Repo for PGM project
 
 # current version of code base only work for BERT models 
 ## ToDO
-- Better interface to preprocess data 
-- Add other model for paper
 - Refactor code to make it more readable
 
 ## ToDo Experiments
-- All the experiments in the paper
+- All the experiments in the paper #only Bert and causal Bert is added
 - Add more experiments with different language models
 - Ablation study on the model
 - sythetic data experiments

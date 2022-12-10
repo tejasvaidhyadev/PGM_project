@@ -4,19 +4,21 @@ import numpy as np
 from numpy.random import normal, uniform
 import argparse
 
+# script to create semi-sythetic data for the project
+
 parser = argparse.ArgumentParser()
 #parser.add_argument('--exp_name', type=str, default='experiment')
 parser.add_argument("--raw_csv", default="PeerRead/dat/PeerRead/proc/arxiv-all.tf_record.csv", type=str, required=False,
                     help="raw csv containing all the information about data")
-parser.add_argument("--save_csv", default="PeerRead/dat/PeerRead/proc/temp.csv", type=str, required=False,
+parser.add_argument("--save_csv", default="PeerRead/dat/PeerRead/proc/", type=str, required=False,
                     help="semi-Synthetic CSV file")
 
 parser.add_argument("--treat_strength", default=0.25, type=int, required=False,
-                    help="Treat_strength.")
-parser.add_argument("--con_strength", default=0.5, type=int, required=False,
+                    help="beta0 Treat_strength.")
+parser.add_argument("--con_strength", default=5.0, type=int, required=False,
                     help="beta1 Confounding strength. Also, refer to as gamma in the paper")
 
-parser.add_argument("--noise_level", default=0.5, type=int, required=False,
+parser.add_argument("--noise_level", default=0.0, type=int, required=False,
                     help="gamma in the paper")
 
 args = parser.parse_args()
@@ -52,10 +54,10 @@ def make_buzzy_based_simulated_labeler(treat_strength, con_strength, noise_level
     return labeler
 
 def _outcome_sim(beta0, beta1, gamma, treatment, confounding, noise, setting="simple"):
+    # same as descirbe in paper
     if setting == "simple":
         y0 = beta1 * confounding
         y1 = beta0 + y0
-
         simulated_score = (1. - treatment) * y0 + treatment * y1 + gamma * noise
 
     elif setting == "multiplicative":
@@ -119,5 +121,5 @@ def main(filename, output_dir):
 if __name__ == "__main__":
     # data is generated using PeerRead Library 
     raw_data = args.raw_csv
-    save_data = args.save_csv
+    save_data = args.save_csv + "beta0_" +str(args.treat_strength) + "beta1_" +str(args.con_strength) + "gamma_" + str(args.noise_level) + ".csv"
     main(raw_data, save_data)

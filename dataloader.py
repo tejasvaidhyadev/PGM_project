@@ -6,12 +6,12 @@ CUDA = (torch.cuda.device_count() > 0)
 MASK_IDX = 103
 
 
-def build_dataloader(model_card, batch_size, texts, confounds, treatments = None, outcomes = None, tokenizer= None, sampler = 'random'):
+def build_dataloader(model_card, batch_size, texts, treatments = None, outcomes = None, tokenizer= None, sampler = 'random'):
 
     def collate_Confound_and_treatment(batch):
         # It is not the most efficient way to do it, but it is the easiest
-        texts, confounds, treatments = zip(*batch)
-        return texts, confounds, treatments
+        texts, treatments = zip(*batch)
+        return texts, treatments
 
     if treatments is None:
         # replace treatment with -1
@@ -25,7 +25,7 @@ def build_dataloader(model_card, batch_size, texts, confounds, treatments = None
     
     # store tokenized text confound treatment and outcome in a single default dict
     data_dict = defaultdict(list)
-    for text, confound, treatment, outcome in zip(texts, confounds, treatments, outcomes):
+    for text,  treatment, outcome in zip(texts, treatments, outcomes):
         # convert encode plus special tokens
         # encode_plus will return a dict with keys input_ids, token_type_ids, attention_mask
         tokenized_text = tokenizer.encode_plus(text, add_special_tokens=True, max_length=512, pad_to_max_length=True)
@@ -34,7 +34,6 @@ def build_dataloader(model_card, batch_size, texts, confounds, treatments = None
         data_dict['W_mask'].append(tokenized_text['attention_mask'])
         data_dict['W_len'].append(sum(tokenized_text['attention_mask']))
         #data_dict['text'].append(tokenized_text)
-        data_dict['confound'].append(confound)
         data_dict['treatment'].append(treatment)
         data_dict['outcome'].append(outcome)
     
@@ -43,7 +42,7 @@ def build_dataloader(model_card, batch_size, texts, confounds, treatments = None
     for key in data_dict.keys():
         data_dict[key] = torch.tensor(data_dict[key])
     # create tensor dataset
-    tensor_dataset = TensorDataset(data_dict['W_ids'], data_dict['W_len'], data_dict['W_mask'], data_dict['confound'], data_dict['treatment'], data_dict['outcome'])
+    tensor_dataset = TensorDataset(data_dict['W_ids'], data_dict['W_len'], data_dict['W_mask'], data_dict['treatment'], data_dict['outcome'])
     # create sampler
     if sampler == 'random':
         sampler = RandomSampler(tensor_dataset)
