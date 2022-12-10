@@ -134,8 +134,8 @@ def main():
 
     parser.add_argument('--review-json-dir', type=str, default='../data/all/train/reviews/')
     parser.add_argument('--parsedpdf-json-dir', type=str, default='../data/all/train/parsed_pdfs/')
-    parser.add_argument('--out-dir', type=str, default='../dat/PeerRead/proc')
-    parser.add_argument('--out-file', type=str, default='arxiv-all')
+    parser.add_argument('--out-dir', type=str, default='../process_data')
+    parser.add_argument('--out-file', type=str, default='arxiv-all_try')
     #parser.add_argument('--vocab-file', type=str, default='../../bert/pre-trained/uncased_L-12_H-768_A-12/vocab.txt')
     parser.add_argument('--max-abs-len', type=int, default=250)
     parser.add_argument('--venue', type=int, default=0)

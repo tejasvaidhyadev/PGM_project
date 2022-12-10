@@ -12,8 +12,8 @@ import numpy as np
 CUDA = (torch.cuda.device_count() > 0)
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--exp_name', type=str, default='experiment')
-parser.add_argument("--data_dir", default="./PeerRead/proc/beta0_0.25beta1_5.0gamma_0.0.csv", type=str, required=False,
+parser.add_argument('--exp_name', type=str, default='experiment') 
+parser.add_argument("--data_dir", default="./PeerRead/process_data/beta0_0.25beta1_5.0gamma_0.0.csv", type=str, required=False,
                     help="The input training data file (a csv file).")
 parser.add_argument("--model_card", default="bert-base-uncased", type=str, required=False,
                     help="The model card to use.")
@@ -79,7 +79,7 @@ class CausalBertWrapper:
                     logging.info(f'Epoch {epoch}')
                     if CUDA: 
                         batch = (x.cuda() for x in batch)
-                    W_ids, W_len, W_mask, C, T, Y = batch
+                    W_ids, W_len, W_mask, T, Y = batch
                     # while True:
                     self.model.zero_grad()
                     g, Q0, Q1, g_loss, Q_loss, mlm_loss = self.model(W_ids, W_len, W_mask, T, Y)
@@ -158,6 +158,7 @@ if __name__ == '__main__':
     logging.info('Loading data... at %s', args.data_dir)
     
     df = pd.read_csv(args.data_dir)
+    df["treatment"] = df["treatment"].astype(int)
     cb = CausalBertWrapper(batch_size=args.batch_size,
         g_weight=args.g_weight, Q_weight=args.g_weight, mlm_weight=args.mlm_weight)
     logging.info(df.T)
