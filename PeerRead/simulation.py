@@ -10,9 +10,9 @@ import argparse
 
 parser = argparse.ArgumentParser()
 #parser.add_argument('--exp_name', type=str, default='experiment')
-parser.add_argument("--raw_csv", default="PeerRead/process_data/arxiv-all.tf_record.csv", type=str, required=False,
+parser.add_argument("--raw_csv", default="process_data/arxiv-all.tf_record.csv", type=str, required=False,
                     help="raw csv containing all the information about data")
-parser.add_argument("--save_csv", default="PeerRead/process_data/", type=str, required=False,
+parser.add_argument("--save_csv", default="process_data/", type=str, required=False,
                     help="semi-Synthetic CSV file")
 
 parser.add_argument("--treat_strength", default=0.25, type=int, required=False,
