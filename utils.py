@@ -49,6 +49,7 @@ def make_bow_vector(ids, vocab_size, use_counts=False):
         vec = (vec != 0).float()
     return vec
 
+
 def psi_q_only(q_t0, q_t1, g, t, y, prob_t, truncate_level=0.05):
     q_t0, q_t1, g, t, y = truncate_all_by_g(q_t0, q_t1, g, t, y, truncate_level)
 

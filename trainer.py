@@ -22,7 +22,7 @@ parser.add_argument("--batch_size", default=32, type=int, required=False,
 
 parser.add_argument("--learning_rate", default=2e-5, type=float, required=False,
                     help="The initial learning rate for Adam.")
-parser.add_argument("--num_train_epochs", default=3.0, type=float, required=False,
+parser.add_argument("--num_train_epochs", default=20, type=float, required=False,
                     help="Total number of training epochs to perform.")
 parser.add_argument("--warmup_steps", default=0, type=int, required=False,
                     help="Linear warmup over warmup_steps.")    
@@ -38,8 +38,8 @@ class CausalBertWrapper:
 
     def __init__(self, g_weight=1.0, Q_weight=0.1, mlm_weight=1.0,
         batch_size=32):
-        self.model = CausalBert.from_pretrained(
-            "distilbert-base-uncased",
+        self.model = CausalBert(
+            args.model_card,
             num_labels=2,
             output_attentions=False,
             output_hidden_states=False)
@@ -56,7 +56,7 @@ class CausalBertWrapper:
 
     def train(self, texts, confounds, treatments, outcomes,
             learning_rate=2e-5, epochs=5):
-        dataloader = build_dataloader( "distilbert-base-uncased", self.batch_size,
+        dataloader = build_dataloader( args.model_card, self.batch_size,
             texts, confounds, treatments, outcomes)
 
         self.model.train()
@@ -70,12 +70,13 @@ class CausalBertWrapper:
             losses = []
             self.model.train()
             for step, batch in tqdm(enumerate(dataloader), total=len(dataloader)):
+                    logging.info(f'Epoch {epoch}')
                     if CUDA: 
                         batch = (x.cuda() for x in batch)
                     W_ids, W_len, W_mask, C, T, Y = batch
                     # while True:
                     self.model.zero_grad()
-                    g, Q0, Q1, g_loss, Q_loss, mlm_loss = self.model(W_ids, W_len, W_mask, C, T, Y)
+                    g, Q0, Q1, g_loss, Q_loss, mlm_loss = self.model(W_ids, W_len, W_mask, T, Y)
                     loss = self.loss_weights['g'] * g_loss + \
                             self.loss_weights['Q'] * Q_loss + \
                             self.loss_weights['mlm'] * mlm_loss
@@ -83,14 +84,14 @@ class CausalBertWrapper:
                     optimizer.step()
                     scheduler.step()
                     losses.append(loss.detach().cpu().item())
-            print(np.mean(losses))
+            logging.info(np.mean(losses))
                     # if step > 5: continue
         return self.model
 
 
     def inference(self, texts, confounds, outcome=None):
         self.model.eval()
-        dataloader = build_dataloader("distilbert-base-uncased", self.batch_size, texts, confounds, outcomes=outcome,
+        dataloader = build_dataloader(args.model_card, self.batch_size, texts, confounds, outcomes=outcome,
             sampler='sequential')
         Q0s = []
         Q1s = []
@@ -99,7 +100,7 @@ class CausalBertWrapper:
             if CUDA: 
                 batch = (x.cuda() for x in batch)
             W_ids, W_len, W_mask, C, T, Y = batch
-            g, Q0, Q1, _, _, _ = self.model(W_ids, W_len, W_mask, C, T, use_mlm=False)
+            g, Q0, Q1, _, _, _ = self.model(W_ids, W_len, W_mask, T, use_mlm=False)
             Q0s += Q0.detach().cpu().numpy().tolist()
             Q1s += Q1.detach().cpu().numpy().tolist()
             Ys += Y.detach().cpu().numpy().tolist()
@@ -118,7 +119,7 @@ class CausalBertWrapper:
             Q0 = Q_probs[:, 0]
             Q1 = Q_probs[:, 1]
 
-        return np.mean(Q0 - Q1)
+        return np.mean(Q1 - Q0)
     
     def gt(self, reduced_df):
         gt = reduced_df[reduced_df.treatment == 1].y1.mean() - reduced_df[reduced_df.treatment == 1].y0.mean()
@@ -142,15 +143,20 @@ if __name__ == '__main__':
     logging.info('Loading data... at %s', args.data_dir)
     
     df = pd.read_csv(args.data_dir)
-    cb = CausalBertWrapper(batch_size=32,
-        g_weight=0.1, Q_weight=0.1, mlm_weight=1)
-    print(df.T)
+    cb = CausalBertWrapper(batch_size=args.batch_size,
+        g_weight=0.1, Q_weight=0.1, mlm_weight=5)
+    logging.info(df.T)
 
     # This trainer sucks, but it's a start
-    cb.train(df['title'], df['contains_appendix'], df['treatment'], df['outcome'], epochs=10)
+    cb.train(df['title'], df['contains_appendix'], df['treatment'], df['outcome'], learning_rate=args.learning_rate, epochs=args.num_train_epochs)
     
     logging.info("ATE")
     logging.info(cb.ATE(df['contains_appendix'], df.title, platt_scaling=True))
     
     logging.info("Ground Truth")
+    
+    # very specific to preprocessing and dataformate 
+    gt = df[df.treatment == 1].y1.mean() - df[df.treatment == 1].y0.mean()
+    naive = df[df.treatment == 1].outcome.mean() - df[df.treatment == 0].outcome.mean()
+    
     logging.info("0.11149892158470887")

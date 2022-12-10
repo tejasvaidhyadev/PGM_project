@@ -1,9 +1,5 @@
-from transformers import BertTokenizer
-from transformers import BertModel, BertPreTrainedModel, AdamW, BertConfig
-from transformers import get_linear_schedule_with_warmup
+from transformers import BertModel, BertPreTrainedModel, AdamW, AutoModel, AutoConfig
 
-from transformers import DistilBertTokenizer
-from transformers import DistilBertModel, DistilBertPreTrainedModel
 import torch.nn as nn
 import torch 
 import math 
@@ -12,41 +8,51 @@ from utils import platt_scale, gelu, make_bow_vector
 
 CUDA = (torch.cuda.device_count() > 0)
 MASK_IDX = 103
-    
-class CausalBert(DistilBertPreTrainedModel):
+  
+            
+class CausalBert(nn.Module):
     """The model itself."""
     # very hacky implemenation of the causal bert model, but it works for now
-    def __init__(self, config):
+    def __init__(self, 
+            model_card,
+            num_labels=2,
+            output_attentions=False,
+            output_hidden_states=False):
+        
         # Adapt it to autotokenizers 
-        super().__init__(config)
+        super(CausalBert, self).__init__()
+        config = AutoConfig.from_pretrained(model_card)
+        
+        self.distilbert = AutoModel.from_config(config)
+        print(self.distilbert)
+        self.distilbert.config.output_hidden_states = output_hidden_states
+        self.num_labels = num_labels
 
-        self.num_labels = config.num_labels
         self.vocab_size = config.vocab_size
-
-        self.distilbert = DistilBertModel(config)
-        self.vocab_transform = nn.Linear(config.dim, config.dim)
-        self.vocab_layer_norm = nn.LayerNorm(config.dim, eps=1e-12)
-        self.vocab_projector = nn.Linear(config.dim, config.vocab_size)
+        self.vocab_transform = nn.Linear(config.hidden_size, config.hidden_size)
+        self.vocab_layer_norm = nn.LayerNorm(config.hidden_size, eps=1e-12)
+        self.vocab_projector = nn.Linear(config.hidden_size, config.vocab_size)
 
         self.Q_cls = nn.ModuleDict()
 
         for T in range(2):
             # ModuleDict keys have to be strings..
             self.Q_cls['%d' % T] = nn.Sequential(
-                nn.Linear(config.hidden_size + self.num_labels, 200),
+                nn.Linear(config.hidden_size , 200),
                 nn.ReLU(),
                 nn.Linear(200, self.num_labels))
     
-        self.g_cls = nn.Linear(config.hidden_size + self.num_labels, 
-            self.config.num_labels)
+        self.g_cls = nn.Linear(config.hidden_size, 
+            self.num_labels)
 
-        self.init_weights()
+        #self.init_weights()
 
 
-    def forward(self, W_ids, W_len, W_mask, C, T, Y=None, use_mlm=True):
+    def forward(self, W_ids, W_len, W_mask, T, Y=None, use_mlm=True):
         if use_mlm:
             W_len = W_len.unsqueeze(1) - 2 # -2 because of the +1 below
             mask_class = torch.cuda.FloatTensor if CUDA else torch.FloatTensor
+            # uniformlly masking words
             mask = (mask_class(W_len.shape).uniform_() * W_len.float()).long() + 1 # + 1 to avoid CLS
             target_words = torch.gather(W_ids, 1, mask)
             mlm_labels = torch.ones(W_ids.shape).long() * -100
@@ -56,7 +62,11 @@ class CausalBert(DistilBertPreTrainedModel):
             W_ids.scatter_(1, mask, MASK_IDX)
 
         outputs = self.distilbert(W_ids, attention_mask=W_mask)
+        
+        # rep of all the words 
         seq_output = outputs[0]
+        
+        # rep vec of CLS token
         pooled_output = seq_output[:, 0]
         # seq_output, pooled_output = outputs[:2]
         # pooled_output = self.dropout(pooled_output)
@@ -71,8 +81,10 @@ class CausalBert(DistilBertPreTrainedModel):
         else:
             mlm_loss = 0.0
 
-        C_bow = make_bow_vector(C.unsqueeze(1), self.num_labels)
-        inputs = torch.cat((pooled_output, C_bow), 1)
+        #C_bow = make_bow_vector(C.unsqueeze(1), self.num_labels)
+        #inputs = torch.cat((pooled_output, C_bow), 1)
+        inputs = pooled_output
+        
         # g logits
         g = self.g_cls(inputs)
         if Y is not None:  # TODO train/test mode, this is a lil hacky
@@ -104,7 +116,8 @@ class CausalBert(DistilBertPreTrainedModel):
         else:
             Q_loss = 0.0
 
-        sm = nn.Softmax(dim=1)
+        sm = nn.Sigmoid()
+        #sm = nn.Softmax(dim=1)
         Q0 = sm(Q_logits_T0)[:, 1]
         Q1 = sm(Q_logits_T1)[:, 1]
         g = sm(g)[:, 1]
