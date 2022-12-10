@@ -1,7 +1,6 @@
 # PGM_project
 Repo for PGM project
 
-# current version of code base only work for BERT models 
 ## ToDO
 - Refactor code to make it more readable
 

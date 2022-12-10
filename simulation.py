@@ -1,24 +1,26 @@
+# script to create semi-sythetic data for the project
+## Only use for the generation of data of PEERREAD dataset
+
+
 # read the above csv file in pandas 
 import pandas as pd
 import numpy as np
 from numpy.random import normal, uniform
 import argparse
 
-# script to create semi-sythetic data for the project
-
 parser = argparse.ArgumentParser()
 #parser.add_argument('--exp_name', type=str, default='experiment')
-parser.add_argument("--raw_csv", default="PeerRead/dat/PeerRead/proc/arxiv-all.tf_record.csv", type=str, required=False,
+parser.add_argument("--raw_csv", default="PeerRead/process_data/arxiv-all.tf_record.csv", type=str, required=False,
                     help="raw csv containing all the information about data")
-parser.add_argument("--save_csv", default="PeerRead/dat/PeerRead/proc/", type=str, required=False,
+parser.add_argument("--save_csv", default="PeerRead/process_data/", type=str, required=False,
                     help="semi-Synthetic CSV file")
 
 parser.add_argument("--treat_strength", default=0.25, type=int, required=False,
                     help="beta0 Treat_strength.")
 parser.add_argument("--con_strength", default=5.0, type=int, required=False,
-                    help="beta1 Confounding strength. Also, refer to as gamma in the paper")
+                    help="beta1 Confounding str ength. Also, refer to as gamma in the paper")
 
-parser.add_argument("--noise_level", default=0.0, type=int, required=False,
+parser.add_argument("--noise_level", default=1.0, type=int, required=False,
                     help="gamma in the paper")
 
 args = parser.parse_args()

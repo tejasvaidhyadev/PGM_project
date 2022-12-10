@@ -115,8 +115,8 @@ class CausalBertWrapper:
 
         return probs, preds, Ys, g
 
-    def ATE(self, C, W, Y=None, platt_scaling=False):
-        Q_probs, _, Ys, g = self.inference(W, C, outcome=Y)
+    def ATE(self, W, Y=None, platt_scaling=False):
+        Q_probs, _, Ys, g = self.inference(W, outcome=Y)
         if platt_scaling and Y is not None:
             Q0 = platt_scale(Ys, Q_probs[:, 0])[:, 0]
             Q1 = platt_scale(Ys, Q_probs[:, 1])[:, 1]
