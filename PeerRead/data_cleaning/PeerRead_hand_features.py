@@ -55,36 +55,3 @@ def get_PeerRead_hand_features(paper):
 
     return hand_features
 
-
-def main(args):
-
-    paper_json_dir = args[1]  # train/reviews
-    scienceparse_dir = args[2]  # train/parsed_pdfs
-
-
-    ################################
-    # read reviews
-    ################################
-    print('Reading reviews from...', paper_json_dir)
-    paper_json_filenames = sorted(glob.glob('{}/*.json'.format(paper_json_dir)))
-    papers = []
-    for paper_json_filename in paper_json_filenames:
-        paper = Paper.from_json(paper_json_filename)
-        paper.SCIENCEPARSE = ScienceParseReader.read_science_parse(paper.ID, paper.TITLE, paper.ABSTRACT,
-                                                                   scienceparse_dir)
-        papers.append(paper)
-    random.shuffle(papers)
-    print('Total number of reviews', len(papers))
-
-    id = 1
-    for p in papers:
-        rec = int(p.get_accepted() == True)
-
-        handy = get_PeerRead_hand_features(p)
-        print(handy)
-        exit()
-        id += 1
-
-
-if __name__ == "__main__":
-    main(sys.argv)
