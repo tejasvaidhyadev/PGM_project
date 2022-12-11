@@ -20,7 +20,7 @@ parser.add_argument("--treat_strength", default=0.25, type=int, required=False,
 parser.add_argument("--con_strength", default=5.0, type=int, required=False,
                     help="beta1 Confounding str ength. Also, refer to as gamma in the paper")
 
-parser.add_argument("--noise_level", default=1.0, type=int, required=False,
+parser.add_argument("--noise_level", default=0.0, type=int, required=False,
                     help="gamma in the paper")
 
 args = parser.parse_args()

@@ -7,10 +7,11 @@ import pdb
 from sklearn.linear_model import LogisticRegression
 import torch
 import math
+import numpy as np 
 CUDA = (torch.cuda.device_count() > 0)
 
 def logit(p):
-    return torch.log(p / (1 - p))   
+    return np.log(p / (1 - p))
 
 
 def platt_scale(outcome, probs):
