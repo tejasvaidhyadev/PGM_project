@@ -23,7 +23,7 @@ parser.add_argument("--batch_size", default=8, type=int, required=False,
 
 parser.add_argument("--learning_rate", default=2e-5, type=float, required=False,
                     help="The initial learning rate for Adam.")
-parser.add_argument("--num_train_epochs", default=10, type=float, required=False,
+parser.add_argument("--num_train_epochs", default=1, type=float, required=False,
                     help="Total number of training epochs to perform.")
 parser.add_argument("--warmup_steps", default=0, type=int, required=False,
                     help="Linear warmup over warmup_steps.")    
