@@ -86,7 +86,8 @@ class CausalBert(nn.Module):
         
         # g logits
         g = self.g_cls(inputs)
-        if Y is not None:  # TODO train/test mode, this is a lil hacky
+        if Y is not None:  
+            # Compute cross-entropy loss between generator output and target labels
             g_loss = nn.CrossEntropyLoss()(g.view(-1, self.num_labels), T.view(-1))
         else:
             g_loss = 0.0

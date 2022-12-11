@@ -2,13 +2,19 @@
 
 To recreate the process_data #you can skip this step because we have already this for you :)
 
-Clone the repo for PeerRead [here]()
+- Clone the repo for PeerRead [here]()
+
+
+- Run the following command for preparing data for simulation
 
 ```
 run merge .py # collect all the files in data/all
-cd data_cleaning
+cd prep_data
 python process_PeerRead_abstracts #process the all files and provide a clean csv with text and all the data
 ```
+
+- Simulations 
+python simulation.py
 
 Link for process [dataset](./process_data/)  
 
