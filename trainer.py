@@ -15,15 +15,15 @@ CUDA = (torch.cuda.device_count() > 0)
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument('--exp_name', type=str, default='testing') 
+parser.add_argument('--exp_name', type=str, default='roberta-base-sup') 
 
 parser.add_argument("--data_dir", default="./PeerRead/process_data/beta0_0.25beta1_5.0gamma_0.0.csv", type=str, required=False,
                     help="The input training data file (a csv file).")
 
-parser.add_argument("--model_card", default="bert-base-uncased", type=str, required=False,
+parser.add_argument("--model_card", default="roberta-base", type=str, required=False,
                     help="The model card to use.")
 
-parser.add_argument("--batch_size", default=16, type=int, required=False,
+parser.add_argument("--batch_size", default=32, type=int, required=False,
                     help="Batch size for training.")
 
 parser.add_argument("--learning_rate", default=2e-5, type=float, required=False,
@@ -44,7 +44,7 @@ parser.add_argument("--Q_weigth", default=1, type=float, required=False,
 parser.add_argument("--g_weight", default=1, type=float, required=False,
                     help="Weigthing of g term in loss")
 
-parser.add_argument("--mlm_weight", default=1, type=float, required=False,
+parser.add_argument("--mlm_weight", default=0, type=float, required=False,
                     help="Weigthing of g term in loss")
 
 
@@ -91,7 +91,69 @@ class CausalBertWrapper:
             'mlm': mlm_weight
         }
         self.batch_size = batch_size
+        
+    def train(self, texts, treatments, outcomes, text_val, treatment_val, outcome_val,
+            learning_rate=2e-5, epochs=5):
+        dataloader = build_dataloader( args.model_card, self.batch_size,
+            texts, treatments, outcomes)
+        dataloader_val = build_dataloader( args.model_card, self.batch_size,
+            text_val, treatment_val, outcome_val)
+        self.model.train()
+        optimizer = optim.Adam( self.model.parameters(), lr=learning_rate, eps=1e-8)
+        total_steps = len(dataloader) * epochs
+        warmup_steps = total_steps * 0.1
+        scheduler = get_linear_schedule_with_warmup(
+            optimizer, num_warmup_steps=warmup_steps, num_training_steps=total_steps)
 
+        for epoch in range(epochs):
+            losses = []
+            self.model.train()
+            for step, batch in tqdm(enumerate(dataloader), total=len(dataloader)):
+                    logging.info(f'Epoch {epoch}')
+                    if CUDA: 
+                        batch = (x.cuda() for x in batch)
+                    W_ids, W_len, W_mask, T, Y = batch
+                    # while True:
+                    self.model.zero_grad()
+                    g, Q0, Q1, g_loss, Q_loss, mlm_loss = self.model(W_ids, W_len, W_mask, T, Y)
+                    loss = self.loss_weights['g'] * g_loss + \
+                            self.loss_weights['Q'] * Q_loss + \
+                            self.loss_weights['mlm'] * mlm_loss
+                    loss.backward()
+                    optimizer.step()
+                    scheduler.step()
+                    losses.append(loss.detach().cpu().item())
+            # log training loss
+            logging.info('Training loss')
+            logging.info(np.mean(losses))
+            # validation loss
+            val_losses = []
+            self.model.eval()
+            for step, batch in tqdm(enumerate(dataloader_val), total=len(dataloader_val)):
+                if CUDA: 
+                    batch = (x.cuda() for x in batch)
+                W_ids, W_len, W_mask, T, Y = batch
+                g, Q0, Q1, g_loss, Q_loss, mlm_loss = self.model(W_ids, W_len, W_mask, T, Y)
+                loss = self.loss_weights['g'] * g_loss + \
+                        self.loss_weights['Q'] * Q_loss + \
+                        self.loss_weights['mlm'] * mlm_loss
+                val_losses.append(loss.detach().cpu().item())
+            # do we need to use some other metric? based on paper, we should use the validation loss
+            logging.info('Training loss')
+            logging.info(np.mean(val_losses))
+                    # check if the model directory exists
+            if not os.path.exists(args.output_dir):
+                os.makedirs(args.output_dir)
+
+            # save the best model
+            if epoch == 0:
+                best_loss = np.mean(val_losses)
+                torch.save(self.model.state_dict(), os.path.join(args.output_dir, args.exp_name, 'model.pt'))
+            else:
+                if np.mean(val_losses) < best_loss:
+                    best_loss = np.mean(val_losses)
+                    torch.save(self.model.state_dict(), os.path.join(args.output_dir, args.exp_name, 'model.pt'))           
+        return self.model
 
     def train(self, texts, treatments, outcomes,
             learning_rate=2e-5, epochs=5):
@@ -303,11 +365,11 @@ if __name__ == '__main__':
 
     # load data
     logging.info('Loading data... at %s', args.data_dir)
-    
+    logging.info('Model Card... at %s', args.model_card)
     df = pd.read_csv(args.data_dir)
     # to make sure int values, yes i need to update this in csv file
     df["treatment"] = df["treatment"].astype(int)
-
+    
     df_train, df_test = train_test_split(df, test_size=0.25, random_state=42)
     df_train.to_csv('logs/'+args.exp_name+'/train.csv', index=False)
     df_test.to_csv('logs/'+args.exp_name+'/test.csv', index=False)
