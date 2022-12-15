@@ -6,6 +6,12 @@ Repo for PGM project
 python trainer.py # use args parse to update params
 ```
 
+Model running on server
+- BERT
+- ROBERT
+- 
+
+
 Here are params list
 
 -- exp_name: experiment

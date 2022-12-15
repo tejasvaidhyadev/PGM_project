@@ -1,3 +1,7 @@
+
+# most function is useless in this file
+# this is to get quick inference on train models 
+
 from dataloader import build_dataloader
 from model import CausalBert
 import torch 
@@ -15,15 +19,15 @@ CUDA = (torch.cuda.device_count() > 0)
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument('--exp_name', type=str, default='scibert_mlm_sup') 
+parser.add_argument('--exp_name', type=str, default='roberta_epoches_10') 
 
 parser.add_argument("--data_dir", default="./PeerRead/process_data/beta0_0.25beta1_5.0gamma_0.0.csv", type=str, required=False,
                     help="The input training data file (a csv file).")
 
-parser.add_argument("--model_card", default="allenai/scibert_scivocab_cased", type=str, required=False,
+parser.add_argument("--model_card", default="bert-base-uncased", type=str, required=False,
                     help="The model card to use.")
 
-parser.add_argument("--batch_size", default=24, type=int, required=False,
+parser.add_argument("--batch_size", default=32, type=int, required=False,
                     help="Batch size for training.")
 
 parser.add_argument("--learning_rate", default=2e-5, type=float, required=False,
@@ -32,7 +36,7 @@ parser.add_argument("--learning_rate", default=2e-5, type=float, required=False,
 parser.add_argument("--num_train_epochs", default=10, type=float, required=False,
                     help="Total number of training epochs to perform.")
 
-parser.add_argument("--warmup_steps", default=0, type=int, required=False,
+parser.add_argument("--warmup_steps", default=1, type=int, required=False,
                     help="Linear warmup over warmup_steps.")    
 
 parser.add_argument("--output_dir", default="output", type=str, required=False,
@@ -93,12 +97,11 @@ class CausalBertWrapper:
         self.batch_size = batch_size
 
 
-    def train(self, texts, treatments, outcomes, text_val, treatment_val, outcome_val,
+    def train(self, texts, treatments, outcomes,
             learning_rate=2e-5, epochs=5):
         dataloader = build_dataloader( args.model_card, self.batch_size,
             texts, treatments, outcomes)
-        dataloader_val = build_dataloader( args.model_card, self.batch_size,
-            text_val, treatment_val, outcome_val)
+
         self.model.train()
         optimizer = optim.Adam( self.model.parameters(), lr=learning_rate, eps=1e-8)
         total_steps = len(dataloader) * epochs
@@ -108,6 +111,9 @@ class CausalBertWrapper:
 
         for epoch in range(epochs):
             losses = []
+            Q0s = []
+            Q1s = []
+            Ys = []
             self.model.train()
             for step, batch in tqdm(enumerate(dataloader), total=len(dataloader)):
                     logging.info(f'Epoch {epoch}')
@@ -117,6 +123,11 @@ class CausalBertWrapper:
                     # while True:
                     self.model.zero_grad()
                     g, Q0, Q1, g_loss, Q_loss, mlm_loss = self.model(W_ids, W_len, W_mask, T, Y)
+                    
+                    Q0s += Q0.detach().cpu().numpy().tolist()
+                    Q1s += Q1.detach().cpu().numpy().tolist()
+                    Ys += Y.detach().cpu().numpy().tolist()
+
                     loss = self.loss_weights['g'] * g_loss + \
                             self.loss_weights['Q'] * Q_loss + \
                             self.loss_weights['mlm'] * mlm_loss
@@ -124,37 +135,28 @@ class CausalBertWrapper:
                     optimizer.step()
                     scheduler.step()
                     losses.append(loss.detach().cpu().item())
-            # log training loss
-            logging.info('Training loss')
+                    
             logging.info(np.mean(losses))
-            # validation loss
-            val_losses = []
-            self.model.eval()
-            for step, batch in tqdm(enumerate(dataloader_val), total=len(dataloader_val)):
-                if CUDA: 
-                    batch = (x.cuda() for x in batch)
-                W_ids, W_len, W_mask, T, Y = batch
-                g, Q0, Q1, g_loss, Q_loss, mlm_loss = self.model(W_ids, W_len, W_mask, T, Y)
-                loss = self.loss_weights['g'] * g_loss + \
-                        self.loss_weights['Q'] * Q_loss + \
-                        self.loss_weights['mlm'] * mlm_loss
-                val_losses.append(loss.detach().cpu().item())
-            # do we need to use some other metric? based on paper, we should use the validation loss
-            logging.info('Validation loss')
-            logging.info(np.mean(val_losses))
-                    # check if the model directory exists
-            if not os.path.exists(args.output_dir):
-                os.makedirs(args.output_dir)
+            probs = np.array(list(zip(Q0s, Q1s)))
+            preds = np.argmax(probs, axis=1)
+            
+            
+            # logging.info accuracy
+            # logging.info f1
+            
+            # import f1_score
+            #acc = np.mean(preds == Ys)
+            acc = accuracy_score(Ys, preds)
+            logging.info(f'Accuracy: {acc}')
 
-            # save the best model
-            if epoch == 0:
-                best_loss = np.mean(val_losses)
-                torch.save(self.model.state_dict(), os.path.join("logs", args.exp_name, 'model.pt'))
-            else:
-                if np.mean(val_losses) < best_loss:
-                    best_loss = np.mean(val_losses)
-                    torch.save(self.model.state_dict(), os.path.join("logs", args.exp_name, 'model.pt'))       
+            f1 = f1_score(Ys, preds)
+            logging.info(f'F1: {f1}')
+                
+        # saved the pytorch model
+        torch.save(self.model.state_dict(), os.path.join("logs", args.exp_name, 'model.pt'))
+
         return self.model
+
 
     def inference(self, texts, treatment = None, outcome=None, pretrained_model=None):
         if pretrained_model:
@@ -270,8 +272,8 @@ class CausalBertWrapper:
 
                 old_loss = new_loss
 
-    def ATT(self, W, Y=None, T=None, platt_scaling=False):
-        Q_probs, _, Ys, g = self.inference(W, treatment=T, outcome=Y)
+    def ATT(self, W, Y=None, T=None, pretrained_model = None, platt_scaling=False):
+        Q_probs, _, Ys, g = self.inference(W, treatment=T, outcome=Y, pretrained_model = pretrained_model)
     
         Q0 = Q_probs[:, 0]
         Q1 = Q_probs[:, 1]
@@ -305,28 +307,30 @@ if __name__ == '__main__':
 
     # load data
     logging.info('Loading data... at %s', args.data_dir)
-    logging.info('Model Card... at %s', args.model_card)
-    df = pd.read_csv(args.data_dir)
-    # to make sure int values, yes i need to update this in csv file
-    df["treatment"] = df["treatment"].astype(int)
     
-    df_train, val_df, df_test = np.split(df.sample(frac=1), [int(.6*len(df)), int(.8*len(df))])
-    df_train.to_csv('logs/'+args.exp_name+'/train.csv', index=False)
-    df_test.to_csv('logs/'+args.exp_name+'/test.csv', index=False)
+    #df = pd.read_csv(args.data_dir)
+    # to make sure int values, yes i need to update this in csv file
+    #df["treatment"] = df["treatment"].astype(int)
+    
+    #df_train, df_test = train_test_split(df, test_size=0.25, random_state=42)
+    #df_train.to_csv('logs/'+args.exp_name+'/train.csv', index=False)
+    
+    #df_test.to_csv('logs/'+args.exp_name+'/test.csv', index=False)
 
-
+    df_test = pd.read_csv("logs/unsup_bert_epoches_10/test.csv")
+    
     cb = CausalBertWrapper(batch_size=args.batch_size,
         g_weight=args.g_weight, Q_weight=args.Q_weigth, mlm_weight=args.mlm_weight)
-    logging.info(df.T)
+    
+    logging.info(df_test.T)
 
     # This trainer sucks, but it's a start
-    
-    cb.train(df_train['title'], df_train['treatment'], df_train['outcome'], val_df['title'], val_df['treatment'], val_df["outcome"], learning_rate=args.learning_rate, epochs=args.num_train_epochs)
+    #cb.train(df_train['title'], df_train['treatment'], df_train['outcome'], learning_rate=args.learning_rate, epochs=args.num_train_epochs)
     
     
     # inference run start here
     logging.info("ATT")
-    logging.info(cb.ATT( df_test.title, Y = df_test.outcome, T = df_test.treatment, platt_scaling=True))
+    logging.info(cb.ATT( df_test.title, Y = df_test.outcome, T = df_test.treatment, platt_scaling=True, pretrained_model = "logs/unsup_bert_epoches_10/model.pt"))
     
     logging.info("Ground Truth ATT of Peer read")
     

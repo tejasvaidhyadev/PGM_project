@@ -96,7 +96,6 @@ class CausalBert(nn.Module):
         Q_logits_T1 = self.Q_cls['1'](inputs)
 
         if Y is not None:
-        if Y is not None:
             # Cross entropy for T =1  and Y when T = 1
             Y_T1_labels = Y.clone()
             T0_indices = (T == 0).nonzero().squeeze()
@@ -125,8 +124,8 @@ class CausalBert(nn.Module):
         else:
             Q_loss = 0.0
 
-        sm = nn.Sigmoid()
-        #sm = nn.Softmax(dim=1)
+        #sm = nn.Sigmoid()
+        sm = nn.Softmax(dim=1)
         Q0 = sm(Q_logits_T0)[:, 1]
         Q1 = sm(Q_logits_T1)[:, 1]
         g = sm(g)[:, 1]
