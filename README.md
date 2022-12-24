@@ -43,7 +43,6 @@ Check the readme in `./PeerRead` and `./Reddit` for more details
 
 ! Note: Raw data is in [PeerRead](./PeerRead/process_data/arxiv-all.tf_record.csv) and  [Reddit Processed Data](https://github.com/tejasvaidhyadev/PGM_project/releases/download/0.01/reddit_processed.csv)
 
-```
 
 
 2. Train the model
