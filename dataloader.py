@@ -7,13 +7,26 @@ MASK_IDX = 103
 
 
 def build_dataloader(model_card, batch_size, texts, treatments = None, outcomes = None, tokenizer= None, sampler = 'random'):
-
+    """
+    Build dataloader for text confound treatment and outcome
+    Args:
+        model_card: huggingface model card
+        batch_size: batch size
+        texts: list of text
+        treatments: list of treatment
+        outcomes: list of outcome
+        tokenizer: huggingface tokenizer
+        sampler: random or sequential
+    Returns:
+        dataloader
+    """
     def collate_Confound_and_treatment(batch):
-        # It is not the most efficient way to do it, but it is the easiest
+        "Puts each data field into a tensor with outer dimension batch size"
         texts, treatments = zip(*batch)
         return texts, treatments
 
     if treatments is None:
+        "If treatment is not provided, replace treatment with -1"
         # replace treatment with -1
         treatments = [-1] * len(texts)
     if outcomes is None:

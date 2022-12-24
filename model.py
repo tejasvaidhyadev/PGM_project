@@ -50,6 +50,13 @@ class CausalBert(nn.Module):
 
 
     def forward(self, W_ids, W_len, W_mask, T, Y=None, use_mlm=True):
+        """Forward pass of the model."""
+        # W_ids: (bs, seq_len)
+        # W_len: (bs)
+        # W_mask: (bs, seq_len)
+        # T: (bs)
+        # Y: (bs)
+        # use_mlm: bool
         if use_mlm:
             W_len = W_len.unsqueeze(1) - 2 # -2 because of the +1 below
             mask_class = torch.cuda.FloatTensor if CUDA else torch.FloatTensor
@@ -71,7 +78,6 @@ class CausalBert(nn.Module):
         pooled_output = seq_output[:, 0]
         # seq_output, pooled_output = outputs[:2]
         # pooled_output = self.dropout(pooled_output)
-        # L(wi; ξ, γ) = yi − Q˜(ti, λi; γ)**2+ CrossEntti, g˜(λi; γ) + LU(wi; ξ, γ)
         if use_mlm:
             prediction_logits = self.vocab_transform(seq_output)  # (bs, seq_length, dim)
             prediction_logits = gelu(prediction_logits)  # (bs, seq_length, dim)
