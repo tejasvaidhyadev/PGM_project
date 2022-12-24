@@ -16,8 +16,7 @@ vital information relevant to causal inference. For certain casual estimation ta
 | Transformers (Huggingface) | 2.9.0 | `pip install transformers==2.9.0` |
 | Scikit-learn | 0.23.1 | `pip install scikit-learn==0.23.1` |
 | scipy        | 1.5.0  | `pip install scipy==1.5.0` |
-| NLTK    | 3.5  | `pip install nltk==3.5
-` |
+| NLTK    | 3.5  | `pip install nltk==3.5` |
 
 <!--
 - python 3.8
