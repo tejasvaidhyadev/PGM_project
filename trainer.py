@@ -151,6 +151,7 @@ class CausalBertWrapper:
                 best_loss = np.mean(val_losses)
                 torch.save(self.model.state_dict(), os.path.join("logs", args.exp_name, 'model.pt'))
             else:
+                # save the best model based on validation loss
                 if np.mean(val_losses) < best_loss:
                     best_loss = np.mean(val_losses)
                     torch.save(self.model.state_dict(), os.path.join("logs", args.exp_name, 'model.pt'))       
