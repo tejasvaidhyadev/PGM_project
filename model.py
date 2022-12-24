@@ -93,39 +93,44 @@ class CausalBert(nn.Module):
         # g logits
         g = self.g_cls(inputs)
         if Y is not None:  
-            # Compute cross-entropy loss between generator output and target labels
+            # For now, Treat T as a binary variable
             g_loss = nn.CrossEntropyLoss()(g.view(-1, self.num_labels), T.view(-1))
         else:
             g_loss = 0.0
 
         Q_logits_T0 = self.Q_cls['0'](inputs)
         Q_logits_T1 = self.Q_cls['1'](inputs)
-
+        # if Y is regressed, then we need to compute the loss
+        
         if Y is not None:
-            # Cross entropy for T =1  and Y when T = 1
-            Y_T1_labels = Y.clone()
-            T0_indices = (T == 0).nonzero().squeeze()
-            
-            mask_T0 = torch.zeros_like(Y_T1_labels).scatter_(0, T0_indices, 1)
-            # mask indices where T = 1
-            mask_T1 = 1 - mask_T0
-            # cross entropy for T = 1 and Y when T = 1
-            # apply mask to Y_T1_labels
+            # if Y is regressed, then we need to compute the loss
+            if Y.dtype == torch.float:
+                Q_loss_T0 = nn.MSELoss()(Q_logits_T0.view(-1), Y.view(-1))
+                Q_loss_T1 = nn.MSELoss()(Q_logits_T1.view(-1), Y.view(-1))
+            else:                
+                # Cross entropy for T =1  and Y when T = 1
+                Y_T1_labels = Y.clone()
+                T0_indices = (T == 0).nonzero().squeeze()
+                
+                mask_T0 = torch.zeros_like(Y_T1_labels).scatter_(0, T0_indices, 1)
+                # mask indices where T = 1
+                mask_T1 = 1 - mask_T0
+                # cross entropy for T = 1 and Y when T = 1
+                # apply mask to Y_T1_labels
 
-            Y_T1_labels = Y_T1_labels * mask_T1
+                Y_T1_labels = Y_T1_labels * mask_T1
 
-            #Y_T1_labels = Y.clone().scatter(0, T0_indices, -100)
-            Y_T1_labels = Y * mask_T1
-            Q_loss_T1 = nn.CrossEntropyLoss()(Q_logits_T1.view(-1, self.num_labels), Y_T1_labels.view(-1))
-            Q_loss_T1 = Q_loss_T1 * mask_T1.sum() / mask_T1.shape[0]
+                #Y_T1_labels = Y.clone().scatter(0, T0_indices, -100)
+                Y_T1_labels = Y * mask_T1
+                Q_loss_T1 = nn.CrossEntropyLoss()(Q_logits_T1.view(-1, self.num_labels), Y_T1_labels.view(-1))
+                Q_loss_T1 = Q_loss_T1 * mask_T1.sum() / mask_T1.shape[0]
 
-            # cross entropy for T = 0 and Y when T = 0
-            # apply mask to Y_T0_labels
-            Y_T0_labels = Y * mask_T0
-            Q_loss_T0 = nn.CrossEntropyLoss()(Q_logits_T0.view(-1, self.num_labels), Y_T0_labels.view(-1))
-            Q_loss_T0 = Q_loss_T0 * mask_T0.sum() / mask_T0.shape[0]
+                # cross entropy for T = 0 and Y when T = 0
+                # apply mask to Y_T0_labels
+                Y_T0_labels = Y * mask_T0
+                Q_loss_T0 = nn.CrossEntropyLoss()(Q_logits_T0.view(-1, self.num_labels), Y_T0_labels.view(-1))
+                Q_loss_T0 = Q_loss_T0 * mask_T0.sum() / mask_T0.shape[0]
 
-        # The above is a bit hacky, but it works for now
             Q_loss = Q_loss_T0 + Q_loss_T1
         else:
             Q_loss = 0.0
